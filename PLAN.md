@@ -377,6 +377,21 @@ pre-compressed negotiation later if download size matters.
 - [ ] **6. CI/CD** — `deploy.yml`, staging + prod targets, secrets.
 - [ ] **7. Staging test** against staging DB; fix; **promote to production**; cut over DNS.
 
+### Execution: model & subagent strategy
+- **Spine stays single-threaded on Opus** — phases 0b–4 are sequential and coupled through
+  shared contracts (DB model ↔ JSON shapes ↔ C# DTOs ↔ token format). Security-/correctness-
+  sensitive parts (auth, the encryption port, the `home.php` "others' lists" SQL, reservation-
+  visibility predicates) are kept inline; fanning them to cold agents risks contract drift and
+  pays a context re-derivation cost that exceeds the parallelism win at this scale.
+- **Fan-out point = after the API/DTO contract is frozen (~end of phase 2).** At that seam,
+  these can run in parallel on **Sonnet** (cheaper/faster, in separate git worktrees, then
+  integrated): client CSS/styling port, C# DTO generation from the frozen contract, `deploy.yml`
+  drafting, README. Keep the contract-defining step itself single-threaded first.
+- **Model tiers:** Opus 4.8 = spine/architecture; Sonnet 4.6 = bounded leaf tasks above;
+  Haiku 4.5 = rote work (e.g. mechanical string extraction).
+- **Review, not just build:** run a security pass over the auth/crypto code (e.g.
+  `/code-review ultra`) before promoting to production.
+
 ---
 
 ## 13. Deferred / future

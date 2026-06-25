@@ -365,10 +365,11 @@ pre-compressed negotiation later if download size matters.
 - [x] **0. Confirm schema** — done (`wishlist_db_schema.sql`); findings folded into §4.
 - [x] **0a. Charset** — resolved: legacy DSN uses `charset=utf8` over latin1 columns;
       new API connects the same way. No probe/migration needed (§4 finding 1).
-- [ ] **0b. Schema migration** — `ALTER TABLE users MODIFY password varchar(255)`; create
-      `sessions` table.
-- [ ] **1. Scaffold** repo: `src/` (.NET 10 WASM), `api/` skeleton + router, `config.example.php`,
-      `.gitignore`, `.htaccess`, `README`.
+- [~] **0b. Schema migration** — files written (`db/migrations/001_widen_users_password.sql`,
+      `002_create_sessions.sql`); **still to be run** against local/staging/prod DBs.
+- [x] **1. Scaffold** — `src/` (.NET 10 WASM, base href `/wish-net/`, env-aware API client,
+      sample pages trimmed), `api/` skeleton (router + `ping`, `Config`/`Database`/`Http` lib,
+      `config.example.php`, `.htaccess`), root `.gitignore`, `README`. Client builds clean.
 - [ ] **2. API: auth** — login (incl. master + `§`), token/sessions, password upgrade,
       register, recover/reset, `users`, `categories`.
 - [ ] **3. API: lists** — list/get/add/edit/delete/lock + auto-unlock + share/child rules.

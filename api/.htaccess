@@ -1,0 +1,7 @@
+RewriteEngine On
+
+# Route every request that isn't a real file/dir to the front controller,
+# carrying the resource path in ?path= and preserving any existing query string.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?path=$1 [QSA,L]

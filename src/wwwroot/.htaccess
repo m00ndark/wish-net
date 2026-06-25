@@ -1,0 +1,14 @@
+RewriteEngine On
+RewriteBase /wish-net/
+
+# API is real PHP — never rewrite into the SPA
+RewriteCond %{REQUEST_URI} ^/wish-net/api/ [NC]
+RewriteRule .* - [L]
+
+# SPA fallback for anything that isn't a real file/dir
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /wish-net/index.html [L]
+
+AddType application/wasm .wasm
+AddType application/octet-stream .dll .dat .blat

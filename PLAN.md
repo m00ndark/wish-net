@@ -370,8 +370,10 @@ pre-compressed negotiation later if download size matters.
 - [x] **1. Scaffold** — `src/` (.NET 10 WASM, base href `/wish-net/`, env-aware API client,
       sample pages trimmed), `api/` skeleton (router + `ping`, `Config`/`Database`/`Http` lib,
       `config.example.php`, `.htaccess`), root `.gitignore`, `README`. Client builds clean.
-- [ ] **2. API: auth** — login (incl. master + `§`), token/sessions, password upgrade,
-      register, recover/reset, `users`, `categories`.
+- [x] **2. API: auth** — login (incl. master + `§`), token/sessions, password upgrade,
+      register, recover/reset, `users`, `categories`. Verified end-to-end locally: all login
+      variants (incl. `wrong§`→401), legacy SHA-1→bcrypt upgrade on login, recover/reset with
+      single-use codes, bearer-token auth on protected routes.
 - [ ] **3. API: lists** — list/get/add/edit/delete/lock + auto-unlock + share/child rules.
 - [ ] **4. API: wishes & reservations** — CRUD, reserve, encryption + visibility predicates.
 - [ ] **5. Client** — auth/token plumbing, then Login → Home → List → dialogs → recovery.

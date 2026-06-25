@@ -4,6 +4,7 @@ namespace WishNet;
 
 use PDO;
 use PDOException;
+use PDOStatement;
 
 require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/Http.php';
@@ -30,5 +31,13 @@ final class Database
             }
         }
         return self::$connection;
+    }
+
+    // Prepare + execute a parameterized statement and return it (for fetch/fetchAll/rowCount).
+    public static function query(string $sql, array $params = []): PDOStatement
+    {
+        $statement = self::connection()->prepare($sql);
+        $statement->execute($params);
+        return $statement;
     }
 }

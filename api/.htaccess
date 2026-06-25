@@ -1,5 +1,9 @@
 RewriteEngine On
 
+# Make the Authorization header visible to PHP (Apache often hides it from $_SERVER).
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
 # Route every request that isn't a real file/dir to the front controller,
 # carrying the resource path in ?path= and preserving any existing query string.
 RewriteCond %{REQUEST_FILENAME} !-f

@@ -339,8 +339,24 @@ pre-compressed negotiation later if download size matters.
 
 - `--delete` keeps stale `_framework` files from accumulating.
 - `--exclude 'config.php'` protects the live credentials/keys.
-- Two jobs/targets: **staging** (`wish-net-staging`, on push to a branch) and
-  **production** (`wish-net`, on tag/manual approval). Verify on staging, then promote.
+- Two jobs/targets: **staging** (`wish-net-staging`, on merge to `main`) and
+  **production** (`wish-net`, on a `v*` tag). Verify on staging, then promote.
+
+### Branching & releases (GitHub Flow + tag-based prod)
+- **`main` is always deployable** — single source of truth. No long-lived
+  `develop`/`staging`/`release` branches.
+- **Short-lived feature branches** off `main` (`feat/…`, `fix/…`, `chore/…`), merged via PR
+  and **squash-merged** to keep `main` linear (one tidy commit per feature).
+- **Environments by trigger:**
+  - Merge to `main` → **auto-deploy to staging** (continuous validation).
+  - Tag `v*` (e.g. `v1.0.0`) → **deploy to production**. Tags are the immutable record of
+    what's live and the rollback target (re-deploy the previous tag). A manual
+    `workflow_dispatch` + approval gate is an acceptable alternative.
+- **Phasing the workflow itself:** during initial build-out (no deployed app yet) commit
+  directly to `main` — feature-branch/PR ceremony is overhead until there's a real
+  environment to protect. Switch to branch-per-feature + PR once staging/prod are live.
+- Branch protection: skip review requirements (solo), but once CI exists add a light
+  "require CI green before merge" rule.
 
 ---
 

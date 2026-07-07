@@ -1,7 +1,117 @@
 @page "/"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject TokenStore Store
+@inject ApiAuthStateProvider AuthState
+@inject NavigationManager Nav
 
-<PageTitle>Familjens Önskelista</PageTitle>
+<PageTitle>Önskelistor</PageTitle>
 
-<h1>Familjens Önskelista</h1>
+<h1>Önskelistor</h1>
 
-<p>Skelettet är uppsatt. Sidor och funktionalitet tillkommer i fas 5 (se PLAN.md).</p>
+<p>
+    Välj att titta på någon önskelista eller ändra dina egna listor genom att klicka på länkarna nedan.
+    Du kan låsa en lista för att göra den synlig för andra.
+</p>
+
+@if (_home is null)
+{
+    <p>Laddar…</p>
+}
+else
+{
+    <h2>Mina önskelistor</h2>
+    @if (_home.MyLists.Count == 0)
+    {
+        <p class="muted">(du har inga önskelistor ännu)</p>
+    }
+    else
+    {
+        <ul class="list">
+            @foreach (ListSummary list in _home.MyLists)
+            {
+                <li>
+                    <a href="list/@list.Id">@list.Title</a>
+                    <span class="muted">@Annotation(list)</span>
+                    @if (list.IsLocked)
+                    {
+                        <span class="muted"> — Låst t.o.m. @list.LockedUntil</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    <h2>Andras önskelistor</h2>
+    @if (_home.OthersLists.Count == 0)
+    {
+        <p class="muted">(det finns för närvarande inga låsta listor)</p>
+    }
+    else
+    {
+        @foreach (OthersGroup group in _home.OthersLists)
+        {
+            <h3>@group.Name</h3>
+            <ul class="list">
+                @foreach (ListRef list in group.Lists)
+                {
+                    <li><a href="list/@list.Id">@list.Title</a></li>
+                }
+            </ul>
+        }
+    }
+
+    <p class="actions">
+        <button @onclick="Logout">Logga ut</button>
+    </p>
+}
+
+@code {
+    private HomeLists? _home;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _home = await Api.GetListsAsync();
+    }
+
+    private static string Annotation(ListSummary list)
+    {
+        string childName = Possessive(list.IsChildList ? list.ChildName : "");
+        string sharedName = list.IsOwner ? list.SharedWithName ?? "" : list.OwnerName;
+        bool shared = list.SharedWithUserId is not null;
+
+        if (childName.Length > 0 && shared)
+        {
+            return $" ({childName} önskelista, delas med {sharedName})";
+        }
+        if (childName.Length > 0)
+        {
+            return $" ({childName} önskelista)";
+        }
+        if (shared)
+        {
+            return $" (delas med {sharedName})";
+        }
+        return "";
+    }
+
+    private static string Possessive(string name)
+    {
+        return name.Length > 0 && !name.EndsWith('s') ? name + "s" : name;
+    }
+
+    private async Task Logout()
+    {
+        try
+        {
+            await Api.LogoutAsync();
+        }
+        catch (ApiException)
+        {
+            // already invalid server-side; clear locally anyway
+        }
+        await Store.ClearAsync();
+        AuthState.NotifyLogout();
+        Nav.NavigateTo("login");
+    }
+}

@@ -5,7 +5,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Familjens Önskelista</title>
-    <base href="/wish-net/" />
+    <!-- Root base href for local `dotnet run` (served at /). The production deploy rewrites this
+         to "/wish-net/" for the Hostinger subfolder (see PLAN.md sections 10-11). -->
+    <base href="/" />
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />

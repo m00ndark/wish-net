@@ -12,6 +12,23 @@ require_once __DIR__ . '/lib/Http.php';
 // matches the legacy app (PLAN.md section 7).
 date_default_timezone_set('Europe/Stockholm');
 
+// CORS: production serves the client same-origin (no CORS needed), but local `dotnet run` hosts
+// the client on a different port. Reflect the request origin (bearer-token API, no cookies) and
+// answer preflight requests.
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin !== '')
+{
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Headers: Authorization, Content-Type');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+    header('Vary: Origin');
+}
+if (Http::method() === 'OPTIONS')
+{
+    http_response_code(204);
+    exit;
+}
+
 $segments = explode('/', Http::path());
 $resource = $segments[0];
 $rest = array_slice($segments, 1);

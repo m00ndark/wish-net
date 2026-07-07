@@ -1,0 +1,102 @@
+@page "/list/{Id:int}"
+@attribute [Authorize]
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Önskelista</PageTitle>
+
+@if (_error is not null)
+{
+    <h1>Felaktigt anrop</h1>
+    <p>@_error</p>
+}
+else if (_list is null)
+{
+    <p>Laddar…</p>
+}
+else
+{
+    <h1>@_list.Title</h1>
+
+    @if (_list.IsLocked)
+    {
+        <p class="muted">Listan är låst t.o.m. @_list.LockedUntil.</p>
+    }
+
+    @if (_list.Categories.Count == 0)
+    {
+        <p class="muted">(det finns inga önskningar i denna lista)</p>
+    }
+    else
+    {
+        @foreach (CategoryWishes category in _list.Categories)
+        {
+            <h3>@category.Name</h3>
+            <ul class="list">
+                @foreach (WishDto wish in category.Wishes)
+                {
+                    <li>
+                        <span class="@(wish.IsFullyReserved ? "reserved" : "")">@wish.Description</span>
+                        @if (wish.Link.Length > 0)
+                        {
+                            <br />
+                            <a href="@Href(wish.Link)" target="_blank" rel="noopener">@wish.Link</a>
+                        }
+                        <span class="reservation">@ReservationText(wish)</span>
+                        @if (wish.IsReserved && wish.ReservedBy is not null)
+                        {
+                            <span class="muted"> (@string.Join(", ", wish.ReservedBy.Select(r => ReservedLabel(r, wish.MaxReservationCount))))</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    }
+
+    <p class="actions">
+        <a href="">Tillbaka</a>
+    </p>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private ListDetail? _list;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _list = null;
+        try
+        {
+            _list = await Api.GetListAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.StatusCode == 403 ? "Den efterfrågade listan är inte tillgänglig." : ex.Message;
+        }
+    }
+
+    private static string ReservationText(WishDto wish)
+    {
+        if (wish.IsReserved)
+        {
+            return wish.MaxReservationCount > 1
+                ? $" — {wish.ReservationCount} av {wish.MaxReservationCount} reserverad"
+                : " — Reserverad";
+        }
+        return wish.MaxReservationCount > 0 ? $" — {wish.MaxReservationCount} st" : "";
+    }
+
+    private static string ReservedLabel(ReservedBy reserved, int maxReservationCount)
+    {
+        return maxReservationCount > 1 ? $"{reserved.Count} st {reserved.UserName}" : reserved.UserName;
+    }
+
+    private static string Href(string link)
+    {
+        return link.StartsWith("http://") || link.StartsWith("https://") ? link : "http://" + link;
+    }
+}

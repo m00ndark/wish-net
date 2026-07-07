@@ -1,6 +1,11 @@
+using System;
+using System.Net.Http;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using WishNet.Client;
+using WishNet.Client.Services;
 
 WebAssemblyHostBuilder builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -14,5 +19,12 @@ string apiBaseUrl = string.IsNullOrEmpty(configuredApiBaseUrl)
     : configuredApiBaseUrl;
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
+builder.Services.AddScoped<LocalStorage>();
+builder.Services.AddScoped<TokenStore>();
+builder.Services.AddScoped<ApiClient>();
+
+builder.Services.AddAuthorizationCore();
+builder.Services.AddScoped<ApiAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<ApiAuthStateProvider>());
 
 await builder.Build().RunAsync();

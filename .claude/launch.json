@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wishnet",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src", "--launch-profile", "http"],
+      "port": 5277
+    }
+  ]
+}

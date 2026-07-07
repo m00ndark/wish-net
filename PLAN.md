@@ -325,17 +325,20 @@ AddType application/wasm .wasm
 AddType application/octet-stream .dll .dat .blat
 ```
 
-`index.html` must set `<base href="/wish-net/" />` to match `RewriteBase`.
-Compression: serve **uncompressed** initially (simplest on Apache); add mod_deflate /
-pre-compressed negotiation later if download size matters.
+**`<base href>`:** source `index.html` uses `/` so local `dotnet run` (served at the root) boots;
+the production deploy **rewrites it to `/wish-net/`** to match `RewriteBase` (see §11). Compression:
+serve **uncompressed** initially (simplest on Apache); add mod_deflate / pre-compressed
+negotiation later if download size matters.
 
 ---
 
 ## 11. Deployment (GitHub Actions, SSH)
 
 1. `dotnet publish src -c Release -o publish`
-2. `rsync -az --delete publish/wwwroot/  $USER@$HOST:$DEPLOY_PATH/   --exclude 'api/'`
-3. `rsync -az api/  $USER@$HOST:$DEPLOY_PATH/api/  --exclude 'config.php'`
+2. Rewrite the base href for the subfolder:
+   `sed -i 's|<base href="/" />|<base href="/wish-net/" />|' publish/wwwroot/index.html`
+3. `rsync -az --delete publish/wwwroot/  $USER@$HOST:$DEPLOY_PATH/   --exclude 'api/'`
+4. `rsync -az api/  $USER@$HOST:$DEPLOY_PATH/api/  --exclude 'config.php'`
 
 - `--delete` keeps stale `_framework` files from accumulating.
 - `--exclude 'config.php'` protects the live credentials/keys.
@@ -387,7 +390,11 @@ pre-compressed negotiation later if download size matters.
       enforcement (super bypass), can't-reserve-own-wish (except child lists), max enforcement.
       Shared libs `Ownership`, `Reservations`. Verified vs real data incl. owner-vs-non-owner
       visibility on locked list 10 and a full reserve/edit/delete cycle.
-- [ ] **5. Client** — auth/token plumbing, then Login → Home → List → dialogs → recovery.
+- [~] **5. Client** — **5a done & browser-verified** (login incl. master pwd → Home → List
+      viewing against real data; CORS on API for dev; token/localStorage auth; env-aware
+      HttpClient; base-href dev/prod handling). **5b remaining:** add/edit list & wish dialogs,
+      reserve action, recovery/reset pages, CSS/styling port, and the HTML-in-description
+      decision below.
 - [ ] **6. CI/CD** — `deploy.yml`, staging + prod targets, secrets.
 - [ ] **7. Staging test** against staging DB; fix; **promote to production**; cut over DNS.
 
@@ -418,4 +425,7 @@ pre-compressed negotiation later if download size matters.
   mojibake): `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`. Enables emoji/non-Latin.
   Optional; not needed for current Swedish usage.
 - **Compression** (Brotli/gzip negotiation on Apache) if payload size warrants.
+- **HTML in wish descriptions** — legacy stored/rendered raw HTML (e.g. `<b>…</b>`) in
+  descriptions; the new client escapes it (shows literal tags). Decide: render as HTML like
+  legacy (needs sanitization to avoid XSS) vs. keep escaped vs. strip tags. (Phase 5b.)
 ```

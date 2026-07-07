@@ -1,0 +1,129 @@
+@page "/login"
+@inject ApiClient Api
+@inject TokenStore Store
+@inject ApiAuthStateProvider AuthState
+@inject NavigationManager Nav
+
+<PageTitle>Familjens Önskelista</PageTitle>
+
+<h1>Välkommen till Familjens Önskelista!</h1>
+
+<p>
+    Har du varit här tidigare, välj ditt namn i listan. Är det första gången du är här,
+    ange då ditt namn i textfältet. Ange även lösenord och klicka därefter för att gå vidare.
+</p>
+
+@if (_error is not null)
+{
+    <p class="error">@_error</p>
+}
+
+<h2>Befintlig användare</h2>
+<div class="form-row">
+    <label>Namn:</label>
+    <select @bind="_existingUserId" disabled="@_busy">
+        <option value="0"></option>
+        @foreach (UserSummary user in _users)
+        {
+            <option value="@user.Id">@user.UserName</option>
+        }
+    </select>
+</div>
+<div class="form-row">
+    <label>Lösenord:</label>
+    <input type="password" @bind="_existingPassword" @bind:event="oninput"
+           @onkeydown="@(e => OnEnter(e, LoginExisting))" disabled="@_busy" />
+</div>
+<div class="form-row">
+    <button @onclick="LoginExisting" disabled="@_busy">Vidare</button>
+</div>
+
+<h2>Ny användare</h2>
+<div class="form-row">
+    <label>Namn:</label>
+    <input type="text" @bind="_newName" @bind:event="oninput" disabled="@_busy" />
+</div>
+<div class="form-row">
+    <label>Lösenord:</label>
+    <input type="password" @bind="_newPassword" @bind:event="oninput"
+           @onkeydown="@(e => OnEnter(e, Register))" disabled="@_busy" />
+</div>
+<div class="form-row">
+    <button @onclick="Register" disabled="@_busy">Skapa användare</button>
+</div>
+
+@code {
+    private List<UserSummary> _users = [];
+    private int _existingUserId;
+    private string _existingPassword = "";
+    private string _newName = "";
+    private string _newPassword = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _users = await Api.GetUsersAsync() ?? [];
+        int lastUserId = await Store.GetLastUserIdAsync();
+        if (lastUserId > 0 && _users.Exists(u => u.Id == lastUserId))
+        {
+            _existingUserId = lastUserId;
+        }
+    }
+
+    private Task OnEnter(KeyboardEventArgs e, Func<Task> action)
+    {
+        return e.Key == "Enter" ? action() : Task.CompletedTask;
+    }
+
+    private async Task LoginExisting()
+    {
+        if (_existingUserId <= 0 || _existingPassword.Length == 0)
+        {
+            _error = "Vänligen välj ditt namn och ange lösenord.";
+            return;
+        }
+        await RunAsync(() => Api.LoginAsync(_existingUserId, _existingPassword));
+    }
+
+    private async Task Register()
+    {
+        if (_newName.Length == 0 || _newPassword.Length == 0)
+        {
+            _error = "Vänligen ange namn och lösenord.";
+            return;
+        }
+        if (_users.Exists(u => string.Equals(u.UserName, _newName, System.StringComparison.OrdinalIgnoreCase)))
+        {
+            _error = "Namnet du har angivit finns redan sparat. Välj ditt namn i listan istället.";
+            return;
+        }
+        await RunAsync(() => Api.RegisterAsync(_newName, _newPassword));
+    }
+
+    private async Task RunAsync(Func<Task<AuthResult?>> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            AuthResult? result = await action();
+            if (result is null)
+            {
+                _error = "Inloggningen misslyckades.";
+                return;
+            }
+            await Store.SetSessionAsync(result.Token, result.User);
+            AuthState.NotifyLogin(result.User);
+            Nav.NavigateTo("");
+        }
+        catch (ApiException)
+        {
+            _error = "Namnet eller lösenordet är felaktigt.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

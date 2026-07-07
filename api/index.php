@@ -40,6 +40,11 @@ switch ($resource)
         endpoint_categories($rest);
         break;
 
+    case 'lists':
+        require __DIR__ . '/endpoints/lists.php';
+        endpoint_lists($rest);
+        break;
+
     default:
         Http::error(404, "Unknown resource: '$resource'");
 }

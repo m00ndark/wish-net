@@ -374,7 +374,12 @@ pre-compressed negotiation later if download size matters.
       register, recover/reset, `users`, `categories`. Verified end-to-end locally: all login
       variants (incl. `wrong§`→401), legacy SHA-1→bcrypt upgrade on login, recover/reset with
       single-use codes, bearer-token auth on protected routes.
-- [ ] **3. API: lists** — list/get/add/edit/delete/lock + auto-unlock + share/child rules.
+- [x] **3. API: lists** — GET /lists (my + others'-locked, grouped, super=all), GET/POST/PUT/
+      DELETE /lists/{id}, POST /lists/{id}/lock, auto-unlock sweep, share/child rules,
+      `shared_with` NULL/0/-1 normalization, reservation cleanup on delete. The two byzantine
+      `home.php` queries were replaced with clearer equivalents that return both owner + shared
+      names (client renders "delas med X"); others'-group ordering uses PHP sort (approximates
+      the DB collation). Verified vs real data (users 14/18, super) incl. correct UTF-8.
 - [ ] **4. API: wishes & reservations** — CRUD, reserve, encryption + visibility predicates.
 - [ ] **5. Client** — auth/token plumbing, then Login → Home → List → dialogs → recovery.
 - [ ] **6. CI/CD** — `deploy.yml`, staging + prod targets, secrets.

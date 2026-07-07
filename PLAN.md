@@ -380,7 +380,13 @@ pre-compressed negotiation later if download size matters.
       `home.php` queries were replaced with clearer equivalents that return both owner + shared
       names (client renders "delas med X"); others'-group ordering uses PHP sort (approximates
       the DB collation). Verified vs real data (users 14/18, super) incl. correct UTF-8.
-- [ ] **4. API: wishes & reservations** — CRUD, reserve, encryption + visibility predicates.
+- [x] **4. API: wishes & reservations** — POST/PUT/DELETE /wishes, POST /wishes/{id}/reserve,
+      and GET /lists/{id} extended with categorized wishes + the list.php reservation-visibility
+      predicates (owner-hiding on locked non-child lists, reservedBy names/counts, canReserve).
+      Unique reservation-key generation, encryption, edit/delete clears reservations, lock
+      enforcement (super bypass), can't-reserve-own-wish (except child lists), max enforcement.
+      Shared libs `Ownership`, `Reservations`. Verified vs real data incl. owner-vs-non-owner
+      visibility on locked list 10 and a full reserve/edit/delete cycle.
 - [ ] **5. Client** — auth/token plumbing, then Login → Home → List → dialogs → recovery.
 - [ ] **6. CI/CD** — `deploy.yml`, staging + prod targets, secrets.
 - [ ] **7. Staging test** against staging DB; fix; **promote to production**; cut over DNS.

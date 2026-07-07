@@ -45,6 +45,11 @@ switch ($resource)
         endpoint_lists($rest);
         break;
 
+    case 'wishes':
+        require __DIR__ . '/endpoints/wishes.php';
+        endpoint_wishes($rest);
+        break;
+
     default:
         Http::error(404, "Unknown resource: '$resource'");
 }

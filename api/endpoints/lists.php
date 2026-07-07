@@ -4,11 +4,15 @@ use WishNet\Http;
 use WishNet\Auth;
 use WishNet\Database;
 use WishNet\Crypto;
+use WishNet\Ownership;
+use WishNet\Reservations;
 
 require_once __DIR__ . '/../lib/Http.php';
 require_once __DIR__ . '/../lib/Auth.php';
 require_once __DIR__ . '/../lib/Database.php';
 require_once __DIR__ . '/../lib/Crypto.php';
+require_once __DIR__ . '/../lib/Ownership.php';
+require_once __DIR__ . '/../lib/Reservations.php';
 
 // Shared SELECT for a list row joined to its owner and (optional) shared-with user names.
 const LIST_SELECT =
@@ -109,7 +113,108 @@ function lists_getOne(int $userId, bool $isSuper, int $id): void
     {
         Http::error(403, 'That list is not available.');
     }
+    // Who may modify wishes: the owner/sharee can always ADD (even when locked); EDIT/DELETE only
+    // when the list isn't locked (or the caller is super) — matches list.php.
+    $dto['canAddWish'] = $dto['isMine'];
+    $dto['canModifyWishes'] = $dto['isMine'] && (!$dto['isLocked'] || $isSuper);
+    $dto['categories'] = lists_buildCategories($id, $userId, $dto['isMine'], $dto['isLocked'], $dto['isChildList']);
     Http::json($dto);
+}
+
+// Wishes grouped by category (only categories that have wishes), each wish carrying the
+// caller-appropriate reservation state (the list.php visibility predicates).
+function lists_buildCategories(int $listId, int $userId, bool $myList, bool $listLocked, bool $listChild): array
+{
+    $wishRows = Database::query(
+        'SELECT w.wish_id, w.category_id, c.name category_name, w.short_description, w.link, w.max_reservation_count, w.reservation_key'
+            . ' FROM wishes w INNER JOIN categories c ON w.category_id = c.category_id'
+            . ' WHERE w.wishlist_id = :id ORDER BY w.category_id ASC, w.short_description ASC',
+        [':id' => $listId]
+    )->fetchAll();
+
+    $keyByWishId = [];
+    foreach ($wishRows as $wish)
+    {
+        if ($wish->reservation_key !== null)
+        {
+            $keyByWishId[(int) $wish->wish_id] = Crypto::decrypt($wish->reservation_key);
+        }
+    }
+    $reservationsByWish = Reservations::byWish($keyByWishId);
+
+    $userIds = [];
+    foreach ($reservationsByWish as $ids)
+    {
+        foreach ($ids as $reservingUserId)
+        {
+            $userIds[$reservingUserId] = true;
+        }
+    }
+    $names = lists_userNames(array_keys($userIds));
+
+    $categories = [];
+    foreach ($wishRows as $wish)
+    {
+        $wishId = (int) $wish->wish_id;
+        $reservations = $reservationsByWish[$wishId] ?? [];
+        $count = count($reservations);
+        $max = (int) $wish->max_reservation_count;
+
+        // A wish's reservation state is hidden from the owner of a locked, non-child list.
+        $isReserved = $count > 0 && (!$myList || $listChild || !$listLocked);
+        $isFullyReserved = $isReserved && $max !== -1 && $count >= $max;
+        $canBeReserved = $listLocked && !$isFullyReserved
+            && ($max > 0 || ($max === -1 && !in_array($userId, $reservations, true)));
+        $canReserve = $canBeReserved && (!$myList || $listChild);
+
+        $wishDto = [
+            'id' => $wishId,
+            'description' => $wish->short_description,
+            'link' => $wish->link,
+            'maxReservationCount' => $max,
+            'reservationCount' => $isReserved ? $count : 0,
+            'isReserved' => $isReserved,
+            'isFullyReserved' => $isFullyReserved,
+            'canReserve' => $canReserve,
+        ];
+        if ($isReserved)
+        {
+            $perUser = [];
+            foreach ($reservations as $reservingUserId)
+            {
+                $perUser[$reservingUserId] = ($perUser[$reservingUserId] ?? 0) + 1;
+            }
+            $reservedBy = [];
+            foreach ($perUser as $reservingUserId => $reservedCount)
+            {
+                $reservedBy[] = ['userName' => $names[$reservingUserId] ?? "#$reservingUserId", 'count' => $reservedCount];
+            }
+            $wishDto['reservedBy'] = $reservedBy;
+        }
+
+        $categoryId = (int) $wish->category_id;
+        if (!isset($categories[$categoryId]))
+        {
+            $categories[$categoryId] = ['id' => $categoryId, 'name' => $wish->category_name, 'wishes' => []];
+        }
+        $categories[$categoryId]['wishes'][] = $wishDto;
+    }
+    return array_values($categories);
+}
+
+function lists_userNames(array $userIds): array
+{
+    if ($userIds === [])
+    {
+        return [];
+    }
+    $in = implode(', ', array_map('intval', $userIds));
+    $names = [];
+    foreach (Database::query("SELECT user_id, user_name FROM users WHERE user_id IN ($in)")->fetchAll() as $user)
+    {
+        $names[(int) $user->user_id] = $user->user_name;
+    }
+    return $names;
 }
 
 function lists_add(int $userId): void
@@ -185,8 +290,7 @@ function lists_autoUnlock(): void
 // Owner or the shared-with user may mutate a list (matches legacy userOwnsWishList; super is not exempt).
 function lists_userOwns(int $userId, int $id): bool
 {
-    $row = Database::query('SELECT user_id, shared_with_user_id FROM wishlists WHERE wishlist_id = :id', [':id' => $id])->fetch();
-    return $row !== false && ((int) $row->user_id === $userId || (int) $row->shared_with_user_id === $userId);
+    return Ownership::ownsList($userId, $id);
 }
 
 // Read + validate the add/edit body. Returns [title, sharedWithUserId|null, isChildList, childName].
@@ -249,24 +353,7 @@ function lists_deleteReservationsForList(int $id): void
     $keys = [];
     foreach (Database::query('SELECT reservation_key FROM wishes WHERE wishlist_id = :id AND reservation_key IS NOT NULL', [':id' => $id])->fetchAll() as $wish)
     {
-        $keys[Crypto::decrypt($wish->reservation_key)] = true;
+        $keys[] = Crypto::decrypt($wish->reservation_key);
     }
-    if ($keys === [])
-    {
-        return;
-    }
-    $reservationIds = [];
-    foreach (Database::query('SELECT reservation_id, `key` FROM reservations')->fetchAll() as $reservation)
-    {
-        if (isset($keys[Crypto::decrypt($reservation->key)]))
-        {
-            $reservationIds[] = (int) $reservation->reservation_id;
-        }
-    }
-    if ($reservationIds === [])
-    {
-        return;
-    }
-    $in = implode(', ', $reservationIds);
-    Database::query("DELETE FROM reservations WHERE reservation_id IN ($in)");
+    Reservations::deleteByKeys($keys);
 }

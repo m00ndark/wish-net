@@ -36,7 +36,7 @@ else
                 @foreach (WishDto wish in category.Wishes)
                 {
                     <li>
-                        <span class="@(wish.IsFullyReserved ? "reserved" : "")">@wish.Description</span>
+                        <span class="@(wish.IsFullyReserved ? "reserved" : "")">@((MarkupString)MarkdownRenderer.ToInlineHtml(wish.Description))</span>
                         @if (wish.Link.Length > 0)
                         {
                             <br />

@@ -142,6 +142,8 @@ Confirmed from `wishlist_db_schema.sql` (server: **MariaDB 11.8.6**; DB name
   - `001_widen_users_password.sql` — `ALTER TABLE users MODIFY password varchar(255)`
     (prerequisite for `password_hash()`, §5).
   - `002_create_sessions.sql` — create the `sessions` token table (utf8mb4).
+  - `003_descriptions_to_markdown.sql` — convert legacy `<b>`/`&quot;` in wish descriptions to
+    markdown (phase 5b; see §13).
 - Apply order: run pending migrations against **staging** first, verify, then production —
   same promotion flow as deploys (§11).
 
@@ -425,7 +427,7 @@ negotiation later if download size matters.
   mojibake): `ALTER TABLE ... CONVERT TO CHARACTER SET utf8mb4`. Enables emoji/non-Latin.
   Optional; not needed for current Swedish usage.
 - **Compression** (Brotli/gzip negotiation on Apache) if payload size warrants.
-- **HTML in wish descriptions** — legacy stored/rendered raw HTML (e.g. `<b>…</b>`) in
-  descriptions; the new client escapes it (shows literal tags). Decide: render as HTML like
-  legacy (needs sanitization to avoid XSS) vs. keep escaped vs. strip tags. (Phase 5b.)
+- ~~HTML in wish descriptions~~ — RESOLVED (phase 5b): migrated to **markdown**. Only `<b>`
+  was ever used (10 rows); migration `003` converts `<b>`→`**` and `&quot;`→`"`, the API stores
+  raw text (no more `wash()`), and the client renders via Markdig with raw HTML disabled (safe).
 ```

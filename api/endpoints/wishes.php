@@ -64,8 +64,8 @@ function wishes_add(int $userId): void
         [
             ':list' => $listId,
             ':cat' => $categoryId,
-            ':desc' => wishes_wash($description),
-            ':link' => wishes_wash($link),
+            ':desc' => $description,
+            ':link' => $link,
             ':max' => $count,
             ':rkey' => Crypto::encrypt((string) $key),
         ]
@@ -92,7 +92,7 @@ function wishes_update(int $userId, bool $isSuper, int $id): void
     [$categoryId, $description, $link, $count] = wishes_readBody(Http::body());
     Database::query(
         'UPDATE wishes SET category_id = :cat, short_description = :desc, link = :link, max_reservation_count = :max WHERE wish_id = :id',
-        [':cat' => $categoryId, ':desc' => wishes_wash($description), ':link' => wishes_wash($link), ':max' => $count, ':id' => $id]
+        [':cat' => $categoryId, ':desc' => $description, ':link' => $link, ':max' => $count, ':id' => $id]
     );
     // Editing a wish invalidates any reservations against it (legacy behavior).
     wishes_clearReservations($id);
@@ -174,12 +174,6 @@ function wishes_reserve(int $userId, int $id): void
 }
 
 // --- helpers -------------------------------------------------------------------------------
-
-// Escapes double quotes, matching the legacy wash().
-function wishes_wash(string $value): string
-{
-    return str_replace('"', '&quot;', $value);
-}
 
 // Reads + validates the add/edit body. Returns [categoryId, description, link, maxReservationCount].
 function wishes_readBody(array $body): array

@@ -1,0 +1,22 @@
+@namespace WishNet.Client.Layout
+
+<div class="overlay" @onclick="OnClose">
+    <div class="dialog" @onclick:stopPropagation="true">
+        @if (Title is not null)
+        {
+            <h2>@Title</h2>
+        }
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+}

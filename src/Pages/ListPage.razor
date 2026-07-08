@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Önskelista</PageTitle>
 
@@ -9,6 +10,7 @@
 {
     <h1>Felaktigt anrop</h1>
     <p>@_error</p>
+    <p class="actions"><a href="">Tillbaka</a></p>
 }
 else if (_list is null)
 {
@@ -21,6 +23,11 @@ else
     @if (_list.IsLocked)
     {
         <p class="muted">Listan är låst t.o.m. @_list.LockedUntil.</p>
+    }
+
+    @if (_list.CanAddWish)
+    {
+        <p class="actions"><button @onclick="() => OpenAddWish(0)">Lägg till önskning</button></p>
     }
 
     @if (_list.Categories.Count == 0)
@@ -47,15 +54,86 @@ else
                         {
                             <span class="muted"> (@string.Join(", ", wish.ReservedBy.Select(r => ReservedLabel(r, wish.MaxReservationCount))))</span>
                         }
+                        <span class="actions-inline">
+                            @if (_list.CanModifyWishes)
+                            {
+                                <button class="link" @onclick="() => OpenEditWish(wish, category.Id)">Ändra</button>
+                                <button class="link" @onclick="() => DeleteWish(wish)">Ta bort</button>
+                            }
+                            @if (wish.CanReserve)
+                            {
+                                <button class="link" @onclick="() => OpenReserve(wish)">Reservera</button>
+                            }
+                        </span>
                     </li>
                 }
             </ul>
         }
     }
 
-    <p class="actions">
-        <a href="">Tillbaka</a>
-    </p>
+    <p class="actions"><a href="">Tillbaka</a></p>
+}
+
+@if (_showWishDialog)
+{
+    <Modal Title="@(_editingWishId == 0 ? "Ny önskning" : "Ändra önskning")" OnClose="Cancel">
+        @if (_dialogError is not null)
+        {
+            <p class="error">@_dialogError</p>
+        }
+        <div class="form-row">
+            <label>Kategori:</label>
+            <select @bind="_wishCategoryId">
+                <option value="0"></option>
+                @foreach (CategoryDto category in _categories)
+                {
+                    <option value="@category.Id">@category.Name</option>
+                }
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Beskrivning:</label>
+            <textarea @bind="_wishDescription" @bind:event="oninput" rows="3"></textarea>
+        </div>
+        <p class="muted">Tips: **fet** för fetstil, *kursiv* för kursiv stil.</p>
+        <div class="form-row">
+            <label>Länk:</label>
+            <input @bind="_wishLink" @bind:event="oninput" placeholder="(valfritt)" />
+        </div>
+        <div class="form-row">
+            <label>Antal:</label>
+            <input type="number" min="1" @bind="_wishCountText" placeholder="obegränsat" />
+        </div>
+        <div class="form-row actions">
+            <button @onclick="Cancel">Avbryt</button>
+            <button @onclick="SaveWish" disabled="@_busy">Spara</button>
+        </div>
+    </Modal>
+}
+
+@if (_showReserveDialog)
+{
+    <Modal Title="Reservera önskning" OnClose="Cancel">
+        @if (_dialogError is not null)
+        {
+            <p class="error">@_dialogError</p>
+        }
+        @if (_reserveMax > 1)
+        {
+            <div class="form-row">
+                <label>Antal att reservera:</label>
+                <input type="number" min="1" max="@_reserveMax" @bind="_reserveCount" />
+            </div>
+        }
+        else
+        {
+            <p>Klicka på Reservera för att reservera denna önskning.</p>
+        }
+        <div class="form-row actions">
+            <button @onclick="Cancel">Avbryt</button>
+            <button @onclick="SaveReserve" disabled="@_busy">Reservera</button>
+        </div>
+    </Modal>
 }
 
 @code {
@@ -64,8 +142,34 @@ else
 
     private ListDetail? _list;
     private string? _error;
+    private List<CategoryDto> _categories = [];
+
+    private bool _showWishDialog;
+    private int _editingWishId;
+    private int _wishCategoryId;
+    private string _wishDescription = "";
+    private string _wishLink = "";
+    private string _wishCountText = "";
+
+    private bool _showReserveDialog;
+    private int _reserveWishId;
+    private int _reserveMax = 1;
+    private int _reserveCount = 1;
+
+    private string? _dialogError;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _categories = await Api.GetCategoriesAsync() ?? [];
+    }
 
     protected override async Task OnParametersSetAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
     {
         _error = null;
         _list = null;
@@ -77,6 +181,120 @@ else
         {
             _error = ex.StatusCode == 403 ? "Den efterfrågade listan är inte tillgänglig." : ex.Message;
         }
+    }
+
+    private void OpenAddWish(int categoryId)
+    {
+        _editingWishId = 0;
+        _wishCategoryId = categoryId;
+        _wishDescription = "";
+        _wishLink = "";
+        _wishCountText = "";
+        _dialogError = null;
+        _showWishDialog = true;
+    }
+
+    private void OpenEditWish(WishDto wish, int categoryId)
+    {
+        _editingWishId = wish.Id;
+        _wishCategoryId = categoryId;
+        _wishDescription = wish.Description;
+        _wishLink = wish.Link;
+        _wishCountText = wish.MaxReservationCount > 0 ? wish.MaxReservationCount.ToString() : "";
+        _dialogError = null;
+        _showWishDialog = true;
+    }
+
+    private async Task SaveWish()
+    {
+        if (_wishCategoryId <= 0 || _wishDescription.Trim().Length == 0)
+        {
+            _dialogError = "Vänligen ange både kategori och beskrivning.";
+            return;
+        }
+        int count = int.TryParse(_wishCountText, out int parsed) && parsed > 0 ? parsed : -1;
+        _busy = true;
+        _dialogError = null;
+        try
+        {
+            if (_editingWishId == 0)
+            {
+                await Api.AddWishAsync(Id, _wishCategoryId, _wishDescription.Trim(), _wishLink.Trim(), count);
+            }
+            else
+            {
+                await Api.UpdateWishAsync(_editingWishId, _wishCategoryId, _wishDescription.Trim(), _wishLink.Trim(), count);
+            }
+            _showWishDialog = false;
+            await Load();
+        }
+        catch (ApiException ex)
+        {
+            _dialogError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteWish(WishDto wish)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Ta bort önskningen?");
+        if (!confirmed)
+        {
+            return;
+        }
+        try
+        {
+            await Api.DeleteWishAsync(wish.Id);
+            await Load();
+        }
+        catch (ApiException)
+        {
+            // ignore
+        }
+    }
+
+    private void OpenReserve(WishDto wish)
+    {
+        _reserveWishId = wish.Id;
+        _reserveMax = wish.MaxReservationCount > 0 ? wish.MaxReservationCount - wish.ReservationCount : 1;
+        _reserveCount = 1;
+        _dialogError = null;
+        _showReserveDialog = true;
+    }
+
+    private async Task SaveReserve()
+    {
+        int count = _reserveMax > 1 ? _reserveCount : 1;
+        if (count < 1)
+        {
+            _dialogError = "Ange ett giltigt antal.";
+            return;
+        }
+        _busy = true;
+        _dialogError = null;
+        try
+        {
+            await Api.ReserveWishAsync(_reserveWishId, count);
+            _showReserveDialog = false;
+            await Load();
+        }
+        catch (ApiException ex)
+        {
+            _dialogError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        _showWishDialog = false;
+        _showReserveDialog = false;
     }
 
     private static string ReservationText(WishDto wish)

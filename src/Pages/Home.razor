@@ -4,6 +4,7 @@
 @inject TokenStore Store
 @inject ApiAuthStateProvider AuthState
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Önskelistor</PageTitle>
 
@@ -23,7 +24,7 @@ else
     <h2>Mina önskelistor</h2>
     @if (_home.MyLists.Count == 0)
     {
-        <p class="muted">(du har inga önskelistor ännu)</p>
+        <p class="muted">(klicka på "Lägg till" för att skapa en ny lista)</p>
     }
     else
     {
@@ -36,6 +37,17 @@ else
                     @if (list.IsLocked)
                     {
                         <span class="muted"> — Låst t.o.m. @list.LockedUntil</span>
+                    }
+                    else
+                    {
+                        <span class="actions-inline">
+                            <button class="link" @onclick="() => OpenLock(list)">Lås</button>
+                            <button class="link" @onclick="() => OpenEditList(list)">Ändra</button>
+                            @if (list.IsOwner)
+                            {
+                                <button class="link" @onclick="() => DeleteList(list)">Ta bort</button>
+                            }
+                        </span>
                     }
                 </li>
             }
@@ -63,13 +75,94 @@ else
 
     <p class="actions">
         <button @onclick="Logout">Logga ut</button>
+        <button @onclick="OpenAddList">Lägg till</button>
     </p>
+}
+
+@if (_showListDialog)
+{
+    <Modal Title="@(_editingListId == 0 ? "Ny önskelista" : "Ändra önskelista")" OnClose="Cancel">
+        @if (_dialogError is not null)
+        {
+            <p class="error">@_dialogError</p>
+        }
+        <div class="form-row">
+            <label>Titel:</label>
+            <input @bind="_listTitle" @bind:event="oninput" />
+        </div>
+        <div class="form-row">
+            <label><input type="checkbox" @bind="_listShare" /> Dela med</label>
+            <select @bind="_listSharedWith" disabled="@(!_listShare)">
+                <option value="0"></option>
+                @foreach (UserSummary user in _users.Where(u => u.Id != _currentUserId))
+                {
+                    <option value="@user.Id">@user.UserName</option>
+                }
+            </select>
+        </div>
+        <div class="form-row">
+            <label><input type="checkbox" @bind="_listChild" /> Barnönskelista</label>
+            <input @bind="_listChildName" @bind:event="oninput" placeholder="Barnets namn" disabled="@(!_listChild)" />
+        </div>
+        <div class="form-row actions">
+            <button @onclick="Cancel">Avbryt</button>
+            <button @onclick="SaveList" disabled="@_busy">Spara</button>
+        </div>
+    </Modal>
+}
+
+@if (_showLockDialog)
+{
+    <Modal Title="Lås önskelista" OnClose="Cancel">
+        @if (_dialogError is not null)
+        {
+            <p class="error">@_dialogError</p>
+        }
+        <p>
+            När du låst önskelistan kan du inte längre ändra eller ta bort befintliga önskningar,
+            du kan endast lägga till nya. Listan låses automatiskt upp igen efter datumet du angivit.
+        </p>
+        <div class="form-row">
+            <label>Lås t.o.m.:</label>
+            <input type="date" @bind="_lockDate" min="@_tomorrow" />
+        </div>
+        <div class="form-row actions">
+            <button @onclick="Cancel">Avbryt</button>
+            <button @onclick="SaveLock" disabled="@_busy">Lås</button>
+        </div>
+    </Modal>
 }
 
 @code {
     private HomeLists? _home;
+    private List<UserSummary> _users = [];
+    private int _currentUserId;
+    private readonly string _tomorrow = DateTime.Today.AddDays(1).ToString("yyyy-MM-dd");
+
+    private bool _showListDialog;
+    private int _editingListId;
+    private string _listTitle = "";
+    private bool _listShare;
+    private int _listSharedWith;
+    private bool _listChild;
+    private string _listChildName = "";
+
+    private bool _showLockDialog;
+    private int _lockListId;
+    private DateOnly? _lockDate;
+
+    private string? _dialogError;
+    private bool _busy;
 
     protected override async Task OnInitializedAsync()
+    {
+        UserDto? user = await Store.GetUserAsync();
+        _currentUserId = user?.Id ?? 0;
+        _users = await Api.GetUsersAsync() ?? [];
+        await Reload();
+    }
+
+    private async Task Reload()
     {
         _home = await Api.GetListsAsync();
     }
@@ -98,6 +191,125 @@ else
     private static string Possessive(string name)
     {
         return name.Length > 0 && !name.EndsWith('s') ? name + "s" : name;
+    }
+
+    private void OpenAddList()
+    {
+        _editingListId = 0;
+        _listTitle = "";
+        _listShare = false;
+        _listSharedWith = 0;
+        _listChild = false;
+        _listChildName = "";
+        _dialogError = null;
+        _showListDialog = true;
+    }
+
+    private void OpenEditList(ListSummary list)
+    {
+        _editingListId = list.Id;
+        _listTitle = list.Title;
+        _listShare = list.SharedWithUserId is not null;
+        _listSharedWith = list.SharedWithUserId ?? 0;
+        _listChild = list.IsChildList;
+        _listChildName = list.ChildName;
+        _dialogError = null;
+        _showListDialog = true;
+    }
+
+    private async Task SaveList()
+    {
+        if (_listTitle.Trim().Length == 0)
+        {
+            _dialogError = "Vänligen ange en titel.";
+            return;
+        }
+        if (_listChild && _listChildName.Trim().Length == 0)
+        {
+            _dialogError = "Vänligen ange barnets namn.";
+            return;
+        }
+        int? sharedWith = _listShare && _listSharedWith > 0 ? _listSharedWith : null;
+        _busy = true;
+        _dialogError = null;
+        try
+        {
+            if (_editingListId == 0)
+            {
+                await Api.CreateListAsync(_listTitle.Trim(), sharedWith, _listChild, _listChildName.Trim());
+            }
+            else
+            {
+                await Api.UpdateListAsync(_editingListId, _listTitle.Trim(), sharedWith, _listChild, _listChildName.Trim());
+            }
+            _showListDialog = false;
+            await Reload();
+        }
+        catch (ApiException ex)
+        {
+            _dialogError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void OpenLock(ListSummary list)
+    {
+        _lockListId = list.Id;
+        _lockDate = null;
+        _dialogError = null;
+        _showLockDialog = true;
+    }
+
+    private async Task SaveLock()
+    {
+        if (_lockDate is null)
+        {
+            _dialogError = "Vänligen ange ett datum.";
+            return;
+        }
+        _busy = true;
+        _dialogError = null;
+        try
+        {
+            await Api.LockListAsync(_lockListId, _lockDate.Value.ToString("yyyy-MM-dd"));
+            _showLockDialog = false;
+            await Reload();
+        }
+        catch (ApiException ex)
+        {
+            _dialogError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteList(ListSummary list)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", $"Ta bort önskelistan \"{list.Title}\"?");
+        if (!confirmed)
+        {
+            return;
+        }
+        try
+        {
+            await Api.DeleteListAsync(list.Id);
+            await Reload();
+        }
+        catch (ApiException)
+        {
+            // ignore; the list will simply remain
+        }
+    }
+
+    private void Cancel()
+    {
+        _showListDialog = false;
+        _showLockDialog = false;
     }
 
     private async Task Logout()

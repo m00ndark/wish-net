@@ -42,6 +42,27 @@ public sealed class ApiClient
 
     public Task<ListDetail?> GetListAsync(int id) => SendAsync<ListDetail>(HttpMethod.Get, $"lists/{id}", null);
 
+    public Task<ListSummary?> CreateListAsync(string title, int? sharedWithUserId, bool isChildList, string childName) =>
+        SendAsync<ListSummary>(HttpMethod.Post, "lists", new { title, sharedWithUserId, isChildList, childName });
+
+    public Task<ListSummary?> UpdateListAsync(int id, string title, int? sharedWithUserId, bool isChildList, string childName) =>
+        SendAsync<ListSummary>(HttpMethod.Put, $"lists/{id}", new { title, sharedWithUserId, isChildList, childName });
+
+    public Task DeleteListAsync(int id) => SendAsync(HttpMethod.Delete, $"lists/{id}", null);
+
+    public Task LockListAsync(int id, string lockDate) => SendAsync(HttpMethod.Post, $"lists/{id}/lock", new { lockDate });
+
+    // --- wishes ---
+    public Task<WishDto?> AddWishAsync(int listId, int categoryId, string description, string link, int maxReservationCount) =>
+        SendAsync<WishDto>(HttpMethod.Post, "wishes", new { listId, categoryId, description, link, maxReservationCount });
+
+    public Task<WishDto?> UpdateWishAsync(int id, int categoryId, string description, string link, int maxReservationCount) =>
+        SendAsync<WishDto>(HttpMethod.Put, $"wishes/{id}", new { categoryId, description, link, maxReservationCount });
+
+    public Task DeleteWishAsync(int id) => SendAsync(HttpMethod.Delete, $"wishes/{id}", null);
+
+    public Task ReserveWishAsync(int id, int count) => SendAsync(HttpMethod.Post, $"wishes/{id}/reserve", new { count });
+
     // --- helpers ---
     private async Task<T?> SendAsync<T>(HttpMethod method, string path, object? body, bool authorize = true)
     {

@@ -392,11 +392,10 @@ negotiation later if download size matters.
       enforcement (super bypass), can't-reserve-own-wish (except child lists), max enforcement.
       Shared libs `Ownership`, `Reservations`. Verified vs real data incl. owner-vs-non-owner
       visibility on locked list 10 and a full reserve/edit/delete cycle.
-- [~] **5. Client** — **5a done & browser-verified** (login incl. master pwd → Home → List
-      viewing against real data; CORS on API for dev; token/localStorage auth; env-aware
-      HttpClient; base-href dev/prod handling). **5b remaining:** add/edit list & wish dialogs,
-      reserve action, recovery/reset pages, CSS/styling port, and the HTML-in-description
-      decision below.
+- [~] **5. Client** — **5a done** (login → Home → List viewing; CORS; token/localStorage auth;
+      env-aware HttpClient; base-href dev/prod). **5b done:** markdown descriptions (Markdig);
+      list add/edit/delete/lock + wish add/edit/delete/reserve via Modal dialogs (browser-verified
+      add/delete cycle vs real data). **5c remaining:** recovery/reset pages, CSS/styling port.
 - [ ] **6. CI/CD** — `deploy.yml`, staging + prod targets, secrets.
 - [ ] **7. Staging test** against staging DB; fix; **promote to production**; cut over DNS.
 
